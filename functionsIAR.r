@@ -242,3 +242,64 @@ IAR.gamma<-function(y, sT)
                 par<-c(0,0,0)
         return(list(phi=par[1],mu=par[2],sigma=par[3],ll=aux))
 }
+
+
+IAR.phi.t<-function (x, y, sT, nu=3) #Minus Log Full Likelihood Function
+{
+    sigma=x[2]
+    x=x[1]
+    n = length(y)
+    d <- diff(sT)
+    xd=x**d
+    yhat = xd * y[-n]  #Mean of conditional distribution
+    gL=sigma*(1-xd**(2))*((nu-2)/nu)  #Variance of conditional distribution
+    cte = (n-1)*log((gamma((nu+1)/2)/(gamma(nu/2)*sqrt(nu*pi))))
+    stand=((y[-1]-yhat)/sqrt(gL))**2
+    s1=sum(0.5*log(gL))
+    s2=sum(log(1 + (1/nu)*stand))
+    out= cte - s1 - ((nu+1)/2)*s2 -0.5*(log(2*pi) + y[1]**2)
+    out=-out #-Log Likelihood (We want to minimize it)
+    return(out)
+}
+
+IAR.t<-function (y, sT,nu=3) #Find minimum of IAR.phi.gamma
+{
+        aux<-1e10
+        value<-1e10
+        br<-0
+        for(i in 1:20)
+        {
+                phi=runif(1)
+                sigma=var(y)*runif(1)
+                optim<-nlminb(start=c(phi,sigma),obj=IAR.phi.t,y=y,sT=sT,nu=nu,lower=c(0,0.0001),upper=c(0.9999,2*var(y)))
+                value<-optim$objective
+                #print(c(optim$objective,optim$par,aux>value))
+                if(aux>value)
+                {
+                        par<-optim$par
+                        aux<-value
+                        br<-br+1
+                }
+                if(aux<=value & br>10 & i>15)
+                        break;
+        }
+        if(aux==1e10)
+        par<-c(0,0)
+        return(list(phi=par[1],sigma=par[2],ll=aux))
+}
+####Generating T-std IAR
+
+IARt.sample<-function(n,phi,st,sigma2=1,nu=3)
+{
+        delta<-diff(st) #Times differences
+	y <- vector("numeric", n)
+        y[1] <- rnorm(1) #initialization
+        for (i in 2:n)
+        {
+                phid=phi**(delta[i-1]) #Expected Value Conditional Distribution
+                yhat = phid * y[i-1]  #Mean of conditional distribution
+                gL=sigma2*(1-phid**(2)) #Variance Value Conditional Distribution
+                y[i] <- rt(1, df=nu)*sqrt(gL * (nu-2)/nu) + yhat #Conditional-t IAR
+        }
+        return(list(y=y,st=st))
+}
